@@ -47,6 +47,19 @@
             cursor: pointer;
             font-size: 12px;
         }
+        h1 {
+            margin-bottom: 20px;
+        }
+        #authButton {
+            display: none; /* Hide button by default, show only outside Telegram */
+        }
+        .user-photo {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -58,28 +71,14 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const tg = window.Telegram.WebApp;
+            const tg = window.Telegram?.WebApp;
             const authButton = document.getElementById('authButton');
             const statusDiv = document.getElementById('status');
             const userInfoDiv = document.getElementById('userInfo');
             const initDataDisplay = document.getElementById('initDataDisplay');
             
-            // Initialize Telegram Web App
-            tg.expand();
-            tg.ready();
-            
-            statusDiv.textContent = 'App initialized. Click the button to get initData.';
-            
-            // Function to copy text to clipboard
-            function copyToClipboard(text) {
-                navigator.clipboard.writeText(text).then(() => {
-                    alert('Copied to clipboard!');
-                }, (err) => {
-                    console.error('Could not copy text: ', err);
-                });
-            }
-            
-            authButton.addEventListener('click', async function() {
+            // Function to process init data and display user info
+            async function processInitData() {
                 statusDiv.textContent = 'Getting initData...';
                 
                 // Get the initData from Telegram WebApp
@@ -90,13 +89,13 @@
                     return;
                 }
                 
-                // Parse the initData for better display
+                // Parse the initData for user info
                 let parsedInitData;
                 try {
                     // The initData is in URL query string format, so we parse it
                     const params = new URLSearchParams(initData);
                     
-                    // Convert to a more usable format for the backend
+                    // Convert to a more usable format
                     const formattedData = {};
                     for (const [key, value] of params.entries()) {
                         // Try to parse JSON values (like user object)
@@ -117,90 +116,67 @@
                     parsedInitData = { error: 'Failed to parse initData', raw: initData };
                 }
                 
-                // Format for backend (this is the format you should send to your API)
-                const backendFormatData = { initData };
-                
-                // Display the initData for copying to Postman
-                statusDiv.textContent = 'Successfully retrieved and formatted initData!';
+                // Display only the Raw initData
+                statusDiv.textContent = 'Successfully retrieved initData!';
                 initDataDisplay.style.display = 'block';
                 initDataDisplay.innerHTML = `
                     <h3>Raw Telegram initData</h3>
                     <div>${initData}</div>
-                    
-                    <h3>Parsed Telegram initData</h3>
-                    <div>${JSON.stringify(parsedInitData, null, 2)}</div>
-                    
-                    <h3>Backend Format (Copy this for Postman)</h3>
-                    <div>${JSON.stringify(backendFormatData, null, 2)}</div>
                     <button class="copy-button" id="copyRawButton">Copy Raw initData</button>
-                    <button class="copy-button" id="copyParsedButton">Copy Parsed Data</button>
-                    <button class="copy-button" id="copyBackendButton">Copy Backend Format</button>
                 `;
                 
-                // Add event listeners to copy buttons
+                // Add event listener to copy button
                 document.getElementById('copyRawButton').addEventListener('click', () => {
                     copyToClipboard(initData);
                 });
                 
-                document.getElementById('copyParsedButton').addEventListener('click', () => {
-                    copyToClipboard(JSON.stringify(parsedInitData, null, 2));
-                });
-                
-                document.getElementById('copyBackendButton').addEventListener('click', () => {
-                    copyToClipboard(JSON.stringify(backendFormatData, null, 2));
-                });
-                
-                // Comment out the backend request for now
-                /*
-                try {
-                    // Send authentication request to your backend
-                    const response = await fetch('YOUR_NGROK_URL/auth/telegram', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ initData }),
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        statusDiv.textContent = 'Successfully authenticated!';
-                        
-                        // Store token (typically in localStorage for web apps)
-                        localStorage.setItem('token', data.token);
-                        
-                        // Display user info
-                        userInfoDiv.style.display = 'block';
-                        userInfoDiv.innerHTML = `
-                            <h3>User Info</h3>
-                            <p>Name: ${data.user.name}</p>
-                            <p>Username: ${data.user.username || 'Not provided'}</p>
-                            <p>User ID: ${data.user.id}</p>
-                        `;
-                    } else {
-                        statusDiv.textContent = `Authentication failed: ${data.message || 'Unknown error'}`;
-                    }
-                } catch (error) {
-                    statusDiv.textContent = `Error: ${error.message}`;
-                    console.error('Authentication error:', error);
-                }
-                */
-                
-                // Also display some basic user info from parsed data
+                // Display user info with photo
                 if (parsedInitData && parsedInitData.user) {
                     const user = parsedInitData.user;
                     userInfoDiv.style.display = 'block';
+                    
+                    // Prepare the HTML with user photo
+                    let userPhotoHTML = '';
+                    if (user.photo_url) {
+                        userPhotoHTML = `<img src="${user.photo_url}" alt="User Photo" class="user-photo">`;
+                    }
+                    
                     userInfoDiv.innerHTML = `
                         <h3>Basic User Info from Telegram</h3>
+                        ${userPhotoHTML}
                         <p>Name: ${user.first_name} ${user.last_name || ''}</p>
                         <p>Username: ${user.username || 'Not provided'}</p>
                         <p>User ID: ${user.id}</p>
-                        ${user.photo_url ? `<p>Photo URL: <a href="${user.photo_url}" target="_blank">${user.photo_url}</a></p>` : ''}
                         <p>Auth Date: ${new Date(parseInt(parsedInitData.auth_date) * 1000).toLocaleString()}</p>
                     `;
                 }
-            });
+            }
+            
+            // Function to copy text to clipboard
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Copied to clipboard!');
+                }, (err) => {
+                    console.error('Could not copy text: ', err);
+                });
+            }
+            
+            // Check if we're in Telegram environment
+            if (tg) {
+                // Initialize Telegram Web App
+                tg.expand();
+                tg.ready();
+                
+                // Automatically process initData when in Telegram
+                processInitData();
+            } else {
+                // We're outside Telegram, show the button for manual testing
+                statusDiv.textContent = 'Not running in Telegram. Use the button to simulate.';
+                authButton.style.display = 'block';
+                
+                // Add button click event for manual testing outside Telegram
+                authButton.addEventListener('click', processInitData);
+            }
         });
     </script>
 </body>
