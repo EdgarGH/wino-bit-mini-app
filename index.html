@@ -37,6 +37,16 @@
             font-family: monospace;
             font-size: 12px;
         }
+        .copy-button {
+            margin-top: 10px;
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -60,6 +70,15 @@
             
             statusDiv.textContent = 'App initialized. Click the button to get initData.';
             
+            // Function to copy text to clipboard
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Copied to clipboard!');
+                }, (err) => {
+                    console.error('Could not copy text: ', err);
+                });
+            }
+            
             authButton.addEventListener('click', async function() {
                 statusDiv.textContent = 'Getting initData...';
                 
@@ -71,13 +90,65 @@
                     return;
                 }
                 
+                // Parse the initData for better display
+                let parsedInitData;
+                try {
+                    // The initData is in URL query string format, so we parse it
+                    const params = new URLSearchParams(initData);
+                    
+                    // Convert to a more usable format for the backend
+                    const formattedData = {};
+                    for (const [key, value] of params.entries()) {
+                        // Try to parse JSON values (like user object)
+                        try {
+                            if (key === 'user') {
+                                formattedData[key] = JSON.parse(decodeURIComponent(value));
+                            } else {
+                                formattedData[key] = value;
+                            }
+                        } catch (e) {
+                            formattedData[key] = value;
+                        }
+                    }
+                    
+                    parsedInitData = formattedData;
+                } catch (e) {
+                    console.error('Error parsing initData:', e);
+                    parsedInitData = { error: 'Failed to parse initData', raw: initData };
+                }
+                
+                // Format for backend (this is the format you should send to your API)
+                const backendFormatData = { initData };
+                
                 // Display the initData for copying to Postman
-                statusDiv.textContent = 'Successfully retrieved initData!';
+                statusDiv.textContent = 'Successfully retrieved and formatted initData!';
                 initDataDisplay.style.display = 'block';
                 initDataDisplay.innerHTML = `
-                    <h3>Telegram initData (Copy this for Postman)</h3>
+                    <h3>Raw Telegram initData</h3>
                     <div>${initData}</div>
+                    
+                    <h3>Parsed Telegram initData</h3>
+                    <div>${JSON.stringify(parsedInitData, null, 2)}</div>
+                    
+                    <h3>Backend Format (Copy this for Postman)</h3>
+                    <div>${JSON.stringify(backendFormatData, null, 2)}</div>
+                    <button class="copy-button" id="copyRawButton">Copy Raw initData</button>
+                    <button class="copy-button" id="copyParsedButton">Copy Parsed Data</button>
+                    <button class="copy-button" id="copyBackendButton">Copy Backend Format</button>
                 `;
+                
+                // Add event listeners to copy buttons
+                document.getElementById('copyRawButton').addEventListener('click', () => {
+                    copyToClipboard(initData);
+                });
+                
+                document.getElementById('copyParsedButton').addEventListener('click', () => {
+                    copyToClipboard(JSON.stringify(parsedInitData, null, 2));
+                });
+                
+                document.getElementById('copyBackendButton').addEventListener('click', () => {
+                    copyToClipboard(JSON.stringify(backendFormatData, null, 2));
+                });
                 
                 // Comment out the backend request for now
                 /*
@@ -116,15 +187,17 @@
                 }
                 */
                 
-                // Also display some basic user info from Telegram object if available
-                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                    const user = tg.initDataUnsafe.user;
+                // Also display some basic user info from parsed data
+                if (parsedInitData && parsedInitData.user) {
+                    const user = parsedInitData.user;
                     userInfoDiv.style.display = 'block';
                     userInfoDiv.innerHTML = `
                         <h3>Basic User Info from Telegram</h3>
                         <p>Name: ${user.first_name} ${user.last_name || ''}</p>
                         <p>Username: ${user.username || 'Not provided'}</p>
                         <p>User ID: ${user.id}</p>
+                        ${user.photo_url ? `<p>Photo URL: <a href="${user.photo_url}" target="_blank">${user.photo_url}</a></p>` : ''}
+                        <p>Auth Date: ${new Date(parseInt(parsedInitData.auth_date) * 1000).toLocaleString()}</p>
                     `;
                 }
             });
